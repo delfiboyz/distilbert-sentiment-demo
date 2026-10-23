@@ -71,19 +71,19 @@ function configure(env) {
 async function fetchWithProgress(url, file) {
   const res = await nativeFetch(url);
   if (!res.ok) throw new Error(`${file} returned HTTP ${res.status}`);
-  const total = Number(res.headers.get('content-length')) || 0;
-  const out = total ? new Uint8Array(total) : null;
+  // With gzip (GitHub Pages, most CDNs) content-length is the compressed size,
+  // so it only guides progress; the bytes are collected as they arrive.
+  const header = Number(res.headers.get('content-length')) || 0;
   const parts = [];
   let loaded = 0;
   const reader = res.body.getReader();
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
-    if (out) out.set(value, loaded); else parts.push(value);
+    parts.push(value);
     loaded += value.length;
-    self.postMessage({ type: 'progress', file, loaded, total });
+    self.postMessage({ type: 'progress', file, loaded, total: Math.max(header, loaded) });
   }
-  if (out) return out.buffer;
   return new Blob(parts).arrayBuffer();
 }
 
